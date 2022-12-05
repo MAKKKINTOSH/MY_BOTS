@@ -3,18 +3,22 @@ from telebot import types
 from DBfunctions import data_base
 from config import Token
 from datetime import datetime
-from users import admins as ad
 
 bot = telebot.TeleBot(Token)
 DB = data_base('data_base.db')
 
+#FOR TESTS
+from time import time
+#FOR TESTS
+
 current_year = datetime.now().year
 current_month = datetime.now().month
+current_day = datetime.now().day
 
 days_array = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13',
               '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25',
               '26', '27', '28', '29', '30', '31']
-callback_for_days = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8', 'd9', 'd10',
+callback_for_days = ['d01', 'd02', 'd03', 'd04', 'd05', 'd06', 'd07', 'd08', 'd09', 'd10',
                      'd11', 'd12', 'd13', 'd14', 'd15', 'd16', 'd17', 'd18', 'd19',
                      'd20', 'd21', 'd22', 'd23', 'd24', 'd25', 'd26', 'd27', 'd28',
                      'd29', 'd30', 'd31']
@@ -29,21 +33,49 @@ groups_array = ["АСУб-22-1", "ЭВМб-22-2"]
 callback_for_groups = ["asub-22-1", "evmb-22-2"]
 groups_size = len(groups_array)
 
-admins = [ad(545762112, "asub-22-1")]
+main_admin = 545762112
+
+admins = [{'id' : 545762112, 'group' : "asub-22-1"}]
 admins_size = len(admins)
+
+users = [{'id' : 545762112,
+          'group' : "asub-22-1",
+          'month' : current_month,
+          'year' : current_year,
+          'edit_type' : 3}]
 
 def is_admin(id, group):
     for k in range(admins_size):
-        if id == admins[k].user_id:
-            if group == admins[k].group:
+        if id == admins[k]['id']:
+            if group == admins[k]['group']:
                 return True
             return False
 
-#def check_regestration(id):
-#    if not DB.is_registred(id):
-#        bot.send_message(id, "Вы не зарегестрированы\n\n пройдите регистрацию по команде /reg и пользуйтесь ботом")
-#        return False
-#    return True
+def is_user(id):
+    for k in users:
+        if k['id'] == id:
+            return True
+    return False
+
+def take_variable(id, variable):
+    for k in users:
+        if k['id'] == id:
+            return k[variable]
+
+def change_variable(id, variable, value):
+    for k in users:
+        if k['id'] == id:
+            k[variable] = value
+
+def change_date_variable(id, variable, operator):
+    for k in users:
+        if k['id'] == id:
+            var = k[variable]
+            if var == 12 and variable == 'month' and operator == '+':
+                var = 0
+            elif var == 1 and variable == 'month' and operator == '-':
+                var = 13
+            k[variable] = var - 1 if operator == "-" else var + 1
 
 def make_cancel_keyboard():
     keyboard = types.InlineKeyboardMarkup(row_width = 1)
@@ -62,7 +94,7 @@ def make_menu_keyboard(message):
     b2 = types.KeyboardButton("календарь")
     keyboard.add(b1, b2)
 
-    if is_admin(message.chat.id, DB.take_variable(message.chat.id, "user_group")):
+    if is_admin(message.chat.id, take_variable(message.chat.id, 'group')):
         b3 = types.KeyboardButton("добавить")
         b4 = types.KeyboardButton("удалить")
         keyboard.add(b3, b4)
@@ -112,21 +144,15 @@ def make_calendar_keyboard(month = current_month, year = current_year):
 
     return keyboard
 
-#def calendar_markup(message):
-#    keyboard = make_calendar_keyboard()
-#    bot.send_message(message.chat.id, f"Год: {current_year}\nМесяц: {ru_month_array[current_month - 1]}", reply_markup=keyboard)
-
-
-
 def main():
 
     @bot.message_handler(commands = ["start"])
     def start(message):
-        bot.send_message(message.chat.id, "Привет, я - прототип дедлайн бота, мои команды:\n\n"
-                                          "1./reg - выбор вашей группы)\n"
-                                          "2./menu - главное меню\n"
-                                          "3./help - помощь\n"
-                                          "4./contacts - контакты")
+        bot.send_message(message.chat.id, "Привет, я - прототип дедлайн бота\n\n"
+                                          "Чтобы узнать команды, используйте /help\n\n"
+                                          "Но для начала выберите группу")
+
+        bot.send_message(message.chat.id, "Выберите группу", reply_markup = make_registration_keyboard())
 
     @bot.message_handler(commands = ["reg"])        #COMPLETE
     def registration(message):
@@ -135,13 +161,18 @@ def main():
 
     @bot.message_handler(commands = ["menu"])       #COMPLETE
     def menu(message):
-
-        #if not check_regestration(message.chat.id):
-        #    return
+        if not is_user(message.chat.id):
+            bot.send_message(message.chat.id, "Вы не выбрали группу\n\nВыбрать группу можно по команде /reg")
+            return
         bot.send_message(message.chat.id, "Выберите действие", reply_markup = make_menu_keyboard(message))
 
     @bot.message_handler(commands = ["help"])
-    def help(message): ""
+    def help(message):
+        bot.send_message(message.chat.id, "Привет, я - прототип дедлайн бота\n\n"
+                                          "1./reg - выбор вашей группы)\n"
+                                          "2./menu - главное меню\n"
+                                          "3./help - помощь\n"
+                                          "4./contacts - контакты")
 
     @bot.message_handler(commands = ['contacts'])   #COMPLETE
     def contacts(message):
@@ -150,29 +181,90 @@ def main():
                                           "Александр - @chipul1a")
 
     @bot.message_handler(regexp = 'ближайшие 5 дедлайнов')
+    def next_five(message):
+
+        if not is_user(message.chat.id):
+            bot.send_message(message.chat.id, "Вы не выбрали группу\n\nВыбрать группу можно по команде /reg")
+            return
+
 
     @bot.message_handler(regexp = 'календарь')
     def calendar(message):
-        DB.change_variable(message.chat.id, "edit_type", 0)
 
-        DB.change_variable(message.chat.id, "selected_year", current_year)
-        DB.change_variable(message.chat.id, "selected_month", current_month)
+        if not is_user(message.chat.id):
+            bot.send_message(message.chat.id, "Вы не выбрали группу\n\nВыбрать группу можно по команде /reg")
+            return
+
+        global current_month, current_year, current_day
+
+        current_year = datetime.now().year
+        current_month = datetime.now().month
+        current_day = datetime.now().day
+
+        change_variable(message.chat.id, "edit_type", 0)
+        change_variable(message.chat.id, "year", current_year)
+        change_variable(message.chat.id, "month", current_month)
 
         bot.send_message(message.chat.id,
                          f"Выберите дату, на которую хотите посмотреть дедлайн\n\n"
                          f"Год: {current_year}\nМесяц: {ru_month_array[current_month - 1]}",
                          reply_markup = make_calendar_keyboard())
 
-
     @bot.message_handler(regexp = 'добавить')
+    def add(message):
+        if not is_user(message.chat.id):
+            bot.send_message(message.chat.id, "Вы не выбрали группу\n\nВыбрать группу можно по команде /reg")
+            return
+
+        if not is_admin(message.chat.id, take_variable(message.chat.id, 'group')):
+            bot.send_message(message.chat.id, "Вы не являетесь админом этой группы")
+            return
 
     @bot.message_handler(regexp = 'удалить')
+    def delete(message):
+        if not is_user(message.chat.id):
+            bot.send_message(message.chat.id, "Вы не выбрали группу\n\nВыбрать группу можно по команде /reg")
+            return
+
+        if not is_admin(message.chat.id, take_variable(message.chat.id, 'group')):
+            bot.send_message(message.chat.id, "Вы не являетесь админом этой группы")
+            return
 
     @bot.callback_query_handler(func = lambda call:True)
     def callbacks(call):
+
         if call.data in callback_for_groups:
+            global users
             print(call.from_user.id, call.data)
-            DB.new_user(call.from_user.id, call.data)
+            for k in range(len(users)):
+                if users[k]['id'] == call.from_user.id:
+                    users.pop(k)
+                    break
+
+            users += [{'id' : call.from_user.id,
+                       'group' : call.data,
+                       'month' : current_month,
+                       'year' : current_year,
+                       'edit_type' : 3}]
+
+            #start = time()
+            #print(DB.take_variable(call.from_user.id, 'selected_year'))
+            #end = time()
+            #print(end - start)
+
+            #start = time()
+            #print(take_variable(call.from_user.id, 'year'))
+            #end = time()
+            #print(end - start)
+
+
+            #print(users[0])
+            #print(users[0]['id'], "\t", type(users[0]['id']))
+            #print(users[0]['group'], "\t", type(users[0]['group']))
+            #print(users[0]['month'], "\t", type(users[0]['month']))
+            #print(users[0]['year'], "\t", type(users[0]['year']))
+            #print(users[0]['edit_type'], "\t", type(users[0]['edit_type']))
+
             bot.edit_message_text("Вы успешно выбрали группу", chat_id = call.from_user.id, message_id = call.message.message_id)
             return
 
@@ -183,43 +275,40 @@ def main():
 
         if call.data in ['previous_year', 'next_year', 'previous_month', 'next_month']:
             if call.data == 'previous_year':
-                DB.change_date_variable(call.from_user.id, "selected_year", "-")
+                    change_date_variable(call.from_user.id, "year", '-')
 
             if call.data == 'next_year':
-                DB.change_date_variable(call.from_user.id, "selected_year", "+")
+                change_date_variable(call.from_user.id, "year", '+')
 
             if call.data == 'previous_month':
-                DB.change_date_variable(call.from_user.id, "selected_month", "-")
-                if DB.take_variable(call.from_user.id, "selected_month") == 0:
-                    DB.change_variable(call.from_user.id, "selected_month", 12)
+                change_date_variable(call.from_user.id, "month", '-')
 
             if call.data == 'next_month':
-                DB.change_date_variable(call.from_user.id, "selected_month", "+")
-                if DB.take_variable(call.from_user.id, "selected_month") == 13:
-                    DB.change_variable(call.from_user.id, "selected_month", 1)
+                change_date_variable(call.from_user.id, "month", '+')
 
+            set_year = take_variable(call.from_user.id, 'year')
+            set_month = take_variable(call.from_user.id, 'month')
 
-            bot.edit_message_text(f"Год: {DB.take_variable(call.from_user.id, 'selected_year')}\n"
-                                  f"Месяц: {ru_month_array[DB.take_variable(call.from_user.id, 'selected_month') - 1]}",
+            bot.edit_message_text(f"Год: {set_year}\n"
+                                  f"Месяц: {ru_month_array[set_month - 1]}",
                                   chat_id=call.from_user.id,
                                   message_id=call.message.message_id)
 
-            keyboard = make_calendar_keyboard(DB.take_variable(call.from_user.id, 'selected_month'),
-                                              DB.take_variable(call.from_user.id, 'selected_year'))
+            keyboard = make_calendar_keyboard(set_month, set_year)
 
             bot.edit_message_reply_markup(chat_id=call.from_user.id, message_id=call.message.message_id,
                                           reply_markup=keyboard)
             return
 
-        if call.data in callback_for_days:
-            if DB.take_variable(call.from_user.id, "edit_type") == 0:
-                DB.show_deadline()
-
-            if DB.take_variable(call.from_user.id, "edit_type") == 1: ""
-
-            if DB.take_variable(call.from_user.id, "edit_type") == 2: ""
-
+        #if call.data in callback_for_days:
+        #    if #DB.take_variable(call.from_user.id, "edit_type") == 0:
+        #        #DB.show_deadline()
+#
+        #    if #DB.take_variable(call.from_user.id, "edit_type") == 1: ""
+#
+        #    if #DB.take_variable(call.from_user.id, "edit_type") == 2: ""
+#
 if __name__ == "__main__":
     main()
 
-bot.polling(long_polling_timeout=5)
+bot.polling(long_polling_timeout=60)
