@@ -34,6 +34,8 @@ a = data_base('data_base.db')
 #print(end - start)
 #
 #
+
+
 #start = time.time()
 #
 #print(a.show_deadline("asub-22-1", 30, 1, 2000))
@@ -43,14 +45,23 @@ a = data_base('data_base.db')
 #
 #print(end - start)
 
-start = time.time()
-print(start)
+#start = time.time()
+#print(start)
+#
+#day = datetime.datetime.now().day
+#month = datetime.datetime.now().month
+#year = datetime.datetime.now().year
+#
+#end = time.time()
+#print(end)
+#
+#print(end - start)
 
-day = datetime.datetime.now().day
-month = datetime.datetime.now().month
-year = datetime.datetime.now().year
+@bot.message_handler(commands=['start'])
+def welcome(message):
+    mesg = bot.send_message(message.chat.id,'Please send me message')
+    bot.register_next_step_handler(mesg,test)
 
-end = time.time()
-print(end)
 
-print(end - start)
+def test(message):
+    bot.send_message(message.chat.id,'You send me message')
