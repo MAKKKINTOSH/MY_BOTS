@@ -31,15 +31,10 @@ groups_size = len(groups_array)
 
 main_admin = 545762112
 
-admins = [{'id' : 545762112, 'group' : "asub-22-1"},
-          {'id' : 1960549912, 'group' : 'asub-22-1'}]
+admins = DB.take_dictionary('admins', current_month, current_year)
 admins_size = len(admins)
 
-users = [{'id' : 545762112,
-          'group' : "asub-22-1",
-          'month' : current_month,
-          'year' : current_year,
-          'edit_type' : 3}]
+users = DB.take_dictionary('users', current_month, current_year)
 
 def is_admin(id, group):
     for k in range(admins_size):
@@ -74,6 +69,11 @@ def change_date_variable(id, variable, operator):
                 var = 13
             k[variable] = var - 1 if operator == "-" else var + 1
 
+def show_ru_group_name(group):
+    for k in range(len(callback_for_groups)):
+        if group == callback_for_groups[k]:
+            return groups_array[k]
+
 def make_cancel_keyboard():
     keyboard = types.InlineKeyboardMarkup(row_width = 1)
     keyboard.add(types.InlineKeyboardButton("<<", callback_data = "menu"))
@@ -95,7 +95,12 @@ def make_menu_keyboard(message):
         b3 = types.KeyboardButton("добавить")
         b4 = types.KeyboardButton("удалить")
         keyboard.add(b3, b4)
+
+    if message.chat.id == main_admin:
+        keyboard.add(types.KeyboardButton("внести админа"))
+
     return keyboard
+
 
 def make_calendar_keyboard(group, month = current_month, year = current_year):
     keyboard = types.InlineKeyboardMarkup(row_width= 6)
@@ -123,9 +128,11 @@ def make_calendar_keyboard(group, month = current_month, year = current_year):
 
     for k in range(quantity_of_days // 6):
         for k in range(6):
-            text = days_array[current]
+            text = 'ㅤ' + days_array[current]
             if DB.record_exist(group, days_array[current], month_array[month - 1], year):
                 text += '☠'
+            else:
+                text+='ㅤ'
 
             DBR += [types.InlineKeyboardButton(text, callback_data=callback_for_days[current])]
             current+=1
@@ -133,7 +140,13 @@ def make_calendar_keyboard(group, month = current_month, year = current_year):
         DBR = []
 
     for k in range(quantity_of_days % 6):
-        DBR += [types.InlineKeyboardButton(days_array[current], callback_data=callback_for_days[current])]
+        text = 'ㅤ' + days_array[current]
+        if DB.record_exist(group, days_array[current], month_array[month - 1], year):
+            text += '☠'
+        else:
+            text+='ㅤ'
+
+        DBR += [types.InlineKeyboardButton(text, callback_data=callback_for_days[current])]
         current += 1
 
     if quantity_of_days % 6 == 1: keyboard.add(DBR[0])
@@ -209,6 +222,7 @@ def main():
 
         bot.send_message(message.chat.id,
                          f"Выберите дату, на которую хотите посмотреть дедлайн\n\n"
+                         f"Группа: {show_ru_group_name(take_variable(message.chat.id, 'group'))}\n"
                          f"Год: {current_year}\nМесяц: {ru_month_array[current_month - 1]}",
                          reply_markup = make_calendar_keyboard(take_variable(message.chat.id, 'group')))
 
@@ -228,6 +242,7 @@ def main():
 
         bot.send_message(message.chat.id,
                          f"Выберите дату, на которую хотите добавить дедлайн дедлайн\n\n"
+                         f"Группа: {show_ru_group_name(take_variable(message.chat.id, 'group'))}\n"
                          f"Год: {current_year}\nМесяц: {ru_month_array[current_month - 1]}",
                          reply_markup=make_calendar_keyboard(take_variable(message.chat.id, 'group')))
 
@@ -247,8 +262,46 @@ def main():
 
         bot.send_message(message.chat.id,
                          f"Выберите дату, на которую вы хотите удалить дедлайн\n\n"
+                         f"Группа: {show_ru_group_name(take_variable(message.chat.id, 'group'))}\n"
                          f"Год: {current_year}\nМесяц: {ru_month_array[current_month - 1]}",
                          reply_markup=make_calendar_keyboard(take_variable(message.chat.id, 'group')))
+
+    @bot.message_handler(regexp = "внести админа")
+    def add_admin(message):
+        if message.chat.id != main_admin:
+            bot.send_message(message.chat.id, "Это не для тебя")
+            return
+
+        mesg = bot.send_message(message.chat.id, 'Введите id', reply_markup=make_cancel_keyboard())
+        bot.register_next_step_handler(mesg, take_id)
+
+    def take_id(message):
+        id = message.text
+        mesg = bot.send_message(message.chat.id, 'Введите группу', reply_markup=make_cancel_keyboard())
+        bot.register_next_step_handler(mesg, take_group, id)
+
+    def take_group(message, id):
+        global admins
+        for k in range(len(groups_array)):
+
+            if groups_array[k] == message.text:
+
+                group = callback_for_groups[k]
+                DB.make_admin(id, group)
+
+                for m in range(len(admins)):
+                    if admins[m]['id'] == int(id):
+                        admins.pop(m)
+                        break
+
+                admins+=[{'id' : int(id),
+                          'group' : group}]
+
+                bot.send_message(message.chat.id, "Админ добавлен")
+                return
+        bot.send_message(message.chat.id, "вы неправильно указали группу")
+        return
+
     @bot.callback_query_handler(func = lambda call:True)
     def callbacks(call):
 
@@ -265,15 +318,15 @@ def main():
                        'month' : current_month,
                        'year' : current_year,
                        'edit_type' : 3}]
+            DB.make_user(call.from_user.id, call.data)
 
             bot.edit_message_text("Вы успешно выбрали группу", chat_id = call.from_user.id, message_id = call.message.message_id)
-            return
 
         if call.data == "menu":
             bot.clear_step_handler_by_chat_id(chat_id=call.from_user.id)
             bot.delete_message(call.from_user.id, message_id=call.message.message_id)
             bot.send_message(call.from_user.id, "Выберите действие")
-            return
+
 
         if call.data in ['previous_year', 'next_year', 'previous_month', 'next_month']:
             if call.data == 'previous_year':
@@ -291,12 +344,23 @@ def main():
             set_year = take_variable(call.from_user.id, 'year')
             set_month = take_variable(call.from_user.id, 'month')
 
-            bot.edit_message_text(f"Год: {set_year}\n"
+            type = take_variable(call.from_user.id, 'edit_type')
+            if type == 0:
+                text = "ВЫберите дату, на которую хотите посмотреть дедлайн"
+            elif type == 1:
+                text = "Выберите дату, на которую хотите добавить дедлайн дедлайн"
+            else:
+                text = "Выберите дату, на которую вы хотите удалить дедлайн"
+
+
+            bot.edit_message_text(f"{text}\n\n"
+                                  f"Группа: {show_ru_group_name(take_variable(call.from_user.id, 'group'))}\n"
+                                  f"Год: {set_year}\n"
                                   f"Месяц: {ru_month_array[set_month - 1]}",
                                   chat_id=call.from_user.id,
                                   message_id=call.message.message_id,
                                   reply_markup=make_calendar_keyboard(take_variable(call.from_user.id, 'group'), set_month, set_year))
-            return
+
 
         if call.data in callback_for_days:
             if take_variable(call.from_user.id, 'edit_type') == 0:
@@ -312,7 +376,11 @@ def main():
 
             if take_variable(call.from_user.id, 'edit_type') == 1:
 
-                mesg = bot.edit_message_text("Введите дедлайн", call.from_user.id, call.message.message_id, reply_markup = make_cancel_keyboard())
+                set_day = call.data[1:]
+                set_month = month_array[take_variable(call.from_user.id, 'month') - 1]
+                set_year = take_variable(call.from_user.id, 'year')
+
+                mesg = bot.edit_message_text(f"Введите дедлайн на {set_day}.{set_month}.{set_year}", call.from_user.id, call.message.message_id, reply_markup = make_cancel_keyboard())
                 bot.register_next_step_handler(mesg, add_deadline, call.data[1:])
 
 
@@ -329,6 +397,8 @@ def main():
                          take_variable(message.chat.id, "year"),
                          message.text)
 
+        bot.send_message(message.chat.id, "Дедлайн внесен")
+
     def delete_deadline(message, day):
         try:
             DB.delete_deadline(take_variable(message.chat.id, "group"),
@@ -344,7 +414,9 @@ def main():
             pass
 
 
+
+
 if __name__ == "__main__":
     main()
 
-bot.polling(long_polling_timeout=60, none_stop=True)
+bot.polling(long_polling_timeout=5, none_stop=True)
